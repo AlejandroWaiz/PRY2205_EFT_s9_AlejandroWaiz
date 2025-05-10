@@ -1,0 +1,62 @@
+INSERT INTO COBRO_MENSUAL_TARJETA (
+  fecha_proceso, nro_tarjeta, run_cliente, nombre_cliente,
+  direccion_cliente, cupo_total_asignado, cupo_disponible_antes_pago,
+  valor_pago_mes, saldo_pago_mes_ant, dias_atraso_pago_mes_ant,
+  monto_pagar_por_atraso, valor_total_pagar_mes, cupo_disponible_dp_pago,
+  fecha_ultimo_pago
+)
+WITH fechas AS (
+  SELECT 
+    TO_NUMBER(TO_CHAR(DATE '2024-04-01', 'YYYYMM')) AS fecha_proceso,
+    TO_NUMBER(TO_CHAR(DATE '2024-03-01', 'YYYYMM')) AS mes_proceso,
+    TO_NUMBER(TO_CHAR(DATE '2024-02-01', 'YYYYMM')) AS mes_anterior
+  FROM dual
+),
+multas AS (
+  SELECT
+    nro_tarjeta,
+    saldo_por_pagar,
+    CASE
+      WHEN fecha_pago > fecha_vencimiento THEN fecha_pago - fecha_vencimiento
+      ELSE 0
+    END AS dias_atraso
+  FROM PAGO_MENSUAL_TARJETA_CLIENTE
+  WHERE anno_mes_pago = TO_NUMBER(TO_CHAR(DATE '2024-02-01', 'YYYYMM'))  -- febrero
+)
+SELECT
+  f.fecha_proceso,
+  tc.nro_tarjeta,
+  c.numrun || '-' || c.dvrun AS run_cliente,
+  INITCAP(c.pnombre || ' ' || NVL(c.snombre, '') || ' ' || c.appaterno || ' ' || NVL(c.apmaterno, '')) AS nombre_cliente,
+  c.direccion AS direccion_cliente,
+  tc.cupo_compra,
+  tc.cupo_disp_compra,
+  pm.monto_total_pagar,
+  NVL(m.saldo_por_pagar, 0),
+  NVL(m.dias_atraso, 0),
+  CASE
+    WHEN NVL(m.dias_atraso, 0) BETWEEN 1 AND 5 THEN ROUND(pm.monto_total_pagar * 0.10)
+    WHEN NVL(m.dias_atraso, 0) BETWEEN 6 AND 10 THEN ROUND(pm.monto_total_pagar * 0.20)
+    WHEN NVL(m.dias_atraso, 0) BETWEEN 11 AND 15 THEN ROUND(pm.monto_total_pagar * 0.30)
+    WHEN NVL(m.dias_atraso, 0) BETWEEN 16 AND 20 THEN ROUND(pm.monto_total_pagar * 0.40)
+    WHEN NVL(m.dias_atraso, 0) > 20 THEN ROUND(pm.monto_total_pagar * 0.60)
+    ELSE 0
+  END AS monto_pagar_por_atraso,
+  ROUND(pm.monto_total_pagar +
+    CASE
+      WHEN NVL(m.dias_atraso, 0) BETWEEN 1 AND 5 THEN ROUND(pm.monto_total_pagar * 0.10)
+      WHEN NVL(m.dias_atraso, 0) BETWEEN 6 AND 10 THEN ROUND(pm.monto_total_pagar * 0.20)
+      WHEN NVL(m.dias_atraso, 0) BETWEEN 11 AND 15 THEN ROUND(pm.monto_total_pagar * 0.30)
+      WHEN NVL(m.dias_atraso, 0) BETWEEN 16 AND 20 THEN ROUND(pm.monto_total_pagar * 0.40)
+      WHEN NVL(m.dias_atraso, 0) > 20 THEN ROUND(pm.monto_total_pagar * 0.60)
+      ELSE 0
+    END
+    + NVL(m.saldo_por_pagar, 0)
+  ) AS valor_total_pagar_mes,
+  tc.cupo_disp_compra,
+  pm.fecha_pago
+FROM fechas f
+JOIN PAGO_MENSUAL_TARJETA_CLIENTE pm ON pm.anno_mes_pago = f.mes_proceso
+JOIN TARJETA_CLIENTE tc ON tc.nro_tarjeta = pm.nro_tarjeta
+JOIN CLIENTE c ON c.numrun = tc.numrun
+LEFT JOIN multas m ON m.nro_tarjeta = tc.nro_tarjeta;

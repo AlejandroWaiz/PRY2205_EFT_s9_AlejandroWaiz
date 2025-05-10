@@ -1,0 +1,27 @@
+-- CREACIÓN DE VISTA DE INFORMACIÓN COMPLETA DE CLIENTES
+CREATE OR REPLACE VIEW VW_INFO_CLIENTE_COMPLETA AS
+SELECT
+  ROW_NUMBER() OVER (ORDER BY c.numrun) AS correlativo,
+  c.numrun || '-' || c.dvrun AS run_cliente,
+  INITCAP(TRIM(c.pnombre || ' ' || NVL(c.snombre, '') || ' ' || c.appaterno || ' ' || NVL(c.apmaterno, ''))) AS nombre_cliente,
+  c.cod_tipo_cliente,
+  tc.nombre_tipo_cliente,
+  INITCAP(po.nombre_prof_ofic) AS profesion,
+  com.nombre_comuna,
+  r.nombre_region,
+  CASE
+    WHEN c.cod_tipo_cliente BETWEEN 10 AND 20 THEN 'ALTO INGRESO'
+    WHEN c.cod_tipo_cliente = 30 THEN 'MEDIO INGRESO'
+    ELSE 'BAJO INGRESO'
+  END AS segmento_ingreso,
+  (
+    SELECT MIN(nro_tarjeta)
+    FROM TARJETA_CLIENTE t
+    WHERE t.numrun = c.numrun
+  ) AS numero_tarjeta
+FROM
+  CLIENTE c
+  JOIN TIPO_CLIENTE tc ON c.cod_tipo_cliente = tc.cod_tipo_cliente
+  JOIN PROFESION_OFICIO po ON c.cod_prof_ofic = po.cod_prof_ofic
+  JOIN COMUNA com ON c.cod_region = com.cod_region AND c.cod_provincia = com.cod_provincia AND c.cod_comuna = com.cod_comuna
+  JOIN REGION r ON c.cod_region = r.cod_region;

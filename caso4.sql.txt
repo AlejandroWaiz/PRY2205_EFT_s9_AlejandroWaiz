@@ -1,0 +1,88 @@
+-- CASO 4: optimizando índices
+
+-- Paso 1: Consulta sin optimizar
+
+
+EXPLAIN PLAN FOR
+SELECT 
+  cmt.fecha_proceso,
+  cmt.nro_tarjeta,
+  cmt.run_cliente,
+  cmt.valor_total_pagar_mes,
+  tc.numrun,
+  c.pnombre,
+  c.appaterno,
+  tc.cupo_compra
+FROM 
+  COBRO_MENSUAL_TARJETA cmt
+JOIN TARJETA_CLIENTE tc ON cmt.nro_tarjeta = tc.nro_tarjeta
+JOIN CLIENTE c ON tc.numrun = c.numrun
+WHERE cmt.fecha_proceso = 202404;
+
+-- Mostrar plan de ejecución ANTES de optimización
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+
+-- Paso 2: Creando indices
+
+
+CREATE INDEX idx_fecha_proceso ON COBRO_MENSUAL_TARJETA(fecha_proceso);
+
+CREATE INDEX idx_tc_numrun ON TARJETA_CLIENTE(numrun);
+
+
+-- Paso 3: Ejecutando con los nuevos indices
+
+EXPLAIN PLAN FOR
+SELECT 
+  cmt.fecha_proceso,
+  cmt.nro_tarjeta,
+  cmt.run_cliente,
+  cmt.valor_total_pagar_mes,
+  tc.numrun,
+  c.pnombre,
+  c.appaterno,
+  tc.cupo_compra
+FROM 
+  COBRO_MENSUAL_TARJETA cmt
+JOIN TARJETA_CLIENTE tc ON cmt.nro_tarjeta = tc.nro_tarjeta
+JOIN CLIENTE c ON tc.numrun = c.numrun
+WHERE cmt.fecha_proceso = 202404;
+
+-- Mostrando el plan de ejecución despues de la optimizacion
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+
+-- Paso 4: La evidencia... chan chan chan
+
+-- EVIDENCIA PLAN CASO 4:
+-- Antes de los indices:
+
+-- Plan hash value: 2770645454
+-- | Id  | Operation                              | Name                     | Rows  | Bytes | Cost (%CPU)| Time     |
+-- |   0 | SELECT STATEMENT                       |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   1 |  NESTED LOOPS                          |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   2 |   NESTED LOOPS                         |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   3 |    NESTED LOOPS                        |                          |     1 |    66 |     0   (0)| 00:00:01 |
+-- |   4 |     TABLE ACCESS BY INDEX ROWID BATCHED| COBRO_MENSUAL_TARJETA    |     1 |    47 |     0   (0)| 00:00:01 |
+-- |*  5 |      INDEX RANGE SCAN                  | PK_COBRO_MENSUAL_TARJETA |     1 |       |     0   (0)| 00:00:01 |
+-- |   6 |     TABLE ACCESS BY INDEX ROWID        | TARJETA_CLIENTE          |     1 |    19 |     0   (0)| 00:00:01 |
+-- |*  7 |      INDEX UNIQUE SCAN                 | PK_TARJETA_CLIENTE       |     1 |       |     0   (0)| 00:00:01 |
+-- |*  8 |    INDEX UNIQUE SCAN                   | PK_CLIENTE               |     1 |       |     0   (0)| 00:00:01 |
+-- |   9 |   TABLE ACCESS BY INDEX ROWID          | CLIENTE                  |     1 |    22 |     1   (0)| 00:00:01 |
+
+-- Despues de los indices:
+
+-- Plan hash value: 2770645454
+-- | Id  | Operation                              | Name                     | Rows  | Bytes | Cost (%CPU)| Time     |
+-- |   0 | SELECT STATEMENT                       |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   1 |  NESTED LOOPS                          |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   2 |   NESTED LOOPS                         |                          |     1 |    88 |     1   (0)| 00:00:01 |
+-- |   3 |    NESTED LOOPS                        |                          |     1 |    66 |     0   (0)| 00:00:01 |
+-- |   4 |     TABLE ACCESS BY INDEX ROWID BATCHED| COBRO_MENSUAL_TARJETA    |     1 |    47 |     0   (0)| 00:00:01 |
+-- |*  5 |      INDEX RANGE SCAN                  | PK_COBRO_MENSUAL_TARJETA |     1 |       |     0   (0)| 00:00:01 |
+-- |   6 |     TABLE ACCESS BY INDEX ROWID        | TARJETA_CLIENTE          |     1 |    19 |     0   (0)| 00:00:01 |
+-- |*  7 |      INDEX UNIQUE SCAN                 | PK_TARJETA_CLIENTE       |     1 |       |     0   (0)| 00:00:01 |
+-- |*  8 |    INDEX UNIQUE SCAN                   | PK_CLIENTE               |     1 |       |     0   (0)| 00:00:01 |
+-- |   9 |   TABLE ACCESS BY INDEX ROWID          | CLIENTE                  |     1 |    22 |     1   (0)| 00:00:01 |
+
